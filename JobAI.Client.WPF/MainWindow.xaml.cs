@@ -4,6 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.IO;
+using System.Text;
+using System.Windows.Documents;
+using Microsoft.Win32;
+using PdfSharp.Pdf;
+using PdfSharp.Drawing;
 using JobAI.Client.WPF.Services;
 using JobAI.Shared.Models;
 using VacancyDto = JobAI.Shared.Models.VacancyDto;
@@ -18,6 +24,7 @@ namespace JobAI.Client.WPF
         private List<VacancyDto> _vacancies = new List<VacancyDto>();
         private List<CoverLetterDto> _letters = new List<CoverLetterDto>();
         private int? _selectedVacancyId = null;
+        private CoverLetterDto _currentLetter = null;
 
         public MainWindow()
         {
@@ -124,6 +131,8 @@ namespace JobAI.Client.WPF
                 LetterTextBox.Text = "Выберите вакансию";
                 LetterTextBox.IsReadOnly = true;
                 SaveLetterButton.IsEnabled = false;
+                ExportLetterButton.IsEnabled = false;
+                _currentLetter = null;
             }
         }
 
@@ -151,6 +160,7 @@ namespace JobAI.Client.WPF
                 LetterTextBox.Text = letter.LetterText;
                 LetterTextBox.IsReadOnly = false;
                 SaveLetterButton.IsEnabled = true;
+                ExportLetterButton.IsEnabled = true;
                 _currentLetter = letter;
             }
             else
@@ -158,11 +168,10 @@ namespace JobAI.Client.WPF
                 LetterTextBox.Text = "Выберите письмо для просмотра";
                 LetterTextBox.IsReadOnly = true;
                 SaveLetterButton.IsEnabled = false;
+                ExportLetterButton.IsEnabled = false;
                 _currentLetter = null;
             }
         }
-
-        private CoverLetterDto _currentLetter = null;
 
         private async void SaveLetter_Click(object sender, RoutedEventArgs e)
         {
@@ -241,6 +250,148 @@ namespace JobAI.Client.WPF
             {
                 GenerateButton.IsEnabled = true;
             }
+        }
+
+        // ===== Экспорт писем =====
+
+        private void ExportLetter_Click(object sender, RoutedEventArgs e)
+        {
+            if (_currentLetter == null)
+            {
+                MessageBox.Show("Выберите письмо для экспорта", "Внимание",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            try
+            {
+                var dialog = new SaveFileDialog
+                {
+                    Title = "Сохранить письмо как...",
+                    FileName = "CoverLetter",
+                    Filter = "Текстовый файл (*.txt)|*.txt|Документ Word (RTF) (*.rtf)|*.rtf|PDF (*.pdf)|*.pdf",
+                    AddExtension = true,
+                    OverwritePrompt = true
+                };
+
+                if (dialog.ShowDialog() != true)
+                    return;
+
+                var path = dialog.FileName;
+                var ext = Path.GetExtension(path)?.ToLowerInvariant();
+
+                switch (ext)
+                {
+                    case ".txt":
+                        ExportLetterToTxt(path, _currentLetter.LetterText);
+                        StatusTextBlock.Text = "Экспорт в TXT выполнен";
+                        break;
+
+                    case ".rtf":
+                        ExportLetterToRtf(path, _currentLetter.LetterText);
+                        StatusTextBlock.Text = "Экспорт в RTF (Word) выполнен";
+                        break;
+
+                    case ".pdf":
+                        ExportLetterToPdf(path, _currentLetter.LetterText);
+                        StatusTextBlock.Text = "Экспорт в PDF выполнен";
+                        MessageBox.Show("Письмо сохранено в PDF.", "Экспорт в PDF",
+                            MessageBoxButton.OK, MessageBoxImage.Information);
+                        break;
+
+                    default:
+                        MessageBox.Show("Неизвестный формат файла", "Ошибка",
+                            MessageBoxButton.OK, MessageBoxImage.Error);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при экспорте письма: {ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                StatusTextBlock.Text = "Ошибка экспорта";
+            }
+        }
+
+        private void ExportLetterToTxt(string path, string text)
+        {
+            File.WriteAllText(path, text ?? string.Empty, Encoding.UTF8);
+        }
+
+        private string ConvertToRtf(string text)
+        {
+            if (text == null)
+                text = string.Empty;
+
+            var sb = new StringBuilder(text.Length * 2);
+            foreach (var ch in text)
+            {
+                switch (ch)
+                {
+                    case '\\':
+                        sb.Append(@"\\");
+                        break;
+                    case '{':
+                        sb.Append(@"\{");
+                        break;
+                    case '}':
+                        sb.Append(@"\}");
+                        break;
+                    case '\r':
+                        break;
+                    case '\n':
+                        sb.Append(@"\par ");
+                        break;
+                    default:
+                        sb.Append(ch);
+                        break;
+                }
+            }
+
+            var body = sb.ToString();
+            var rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0\\fswiss Arial;}}\n" +
+                      "\\viewkind4\\uc1\\pard\n" +
+                      body +
+                      "\n}";
+
+            return rtf;
+        }
+
+        private void ExportLetterToRtf(string path, string text)
+        {
+            var rtf = ConvertToRtf(text);
+            File.WriteAllText(path, rtf, Encoding.UTF8);
+        }
+
+        private void ExportLetterToPdf(string path, string text)
+        {
+            text ??= string.Empty;
+
+            var document = new PdfDocument();
+            document.Info.Title = "Cover Letter";
+
+            var page = document.AddPage();
+
+            using (var gfx = XGraphics.FromPdfPage(page))
+            {
+                var font = new XFont("Segoe UI", 12, XFontStyle.Regular);
+
+                const double margin = 40;
+                var rect = new XRect(
+                    margin,
+                    margin,
+                    page.Width - 2 * margin,
+                    page.Height - 2 * margin);
+
+                gfx.DrawString(
+                    text,
+                    font,
+                    XBrushes.Black,
+                    rect,
+                    XStringFormats.TopLeft);
+            }
+
+            document.Save(path);
         }
     }
 }

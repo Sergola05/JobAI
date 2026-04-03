@@ -1,18 +1,11 @@
 @JobAI.Server_HostAddress = http://localhost:5143
 
-### ============================================
-### ТЕСТИРОВАНИЕ ВАКАНСИЙ
-### ============================================
-
-### 1. Получить все вакансии
 GET {{JobAI.Server_HostAddress}}/api/Vacancies
 Accept: application/json
 
-### 2. Получить вакансию по ID (замените {id} на реальный ID)
 GET {{JobAI.Server_HostAddress}}/api/Vacancies/1
 Accept: application/json
 
-### 3. Создать новую вакансию
 POST {{JobAI.Server_HostAddress}}/api/Vacancies
 Content-Type: application/json
 
@@ -24,15 +17,10 @@ Content-Type: application/json
   "description": "Требуется опытный разработчик .NET с опытом работы с ASP.NET Core, Entity Framework, SQL Server. Опыт работы от 3 лет."
 }
 
-### 4. Удалить вакансию (замените {id} на реальный ID)
+
 DELETE {{JobAI.Server_HostAddress}}/api/Vacancies/1
 
-### ============================================
-### ТЕСТИРОВАНИЕ СОПРОВОДИТЕЛЬНЫХ ПИСЕМ
-### ============================================
 
-### 5. Сгенерировать сопроводительное письмо
-### ⚠️ Замените vacancyId на реальный ID вакансии
 POST {{JobAI.Server_HostAddress}}/api/CoverLetters/generate
 Content-Type: application/json
 
@@ -44,11 +32,10 @@ Content-Type: application/json
   "candidateExperience": "5 лет опыта разработки на .NET. Работал над крупными проектами, включая веб-приложения и API. Опыт работы с микросервисной архитектурой."
 }
 
-### 6. Получить все письма по вакансии (замените {vacancyId} на реальный ID)
+
 GET {{JobAI.Server_HostAddress}}/api/CoverLetters/by-vacancy/1
 Accept: application/json
 
-### 7. Обновить письмо (замените {id} на реальный ID письма)
 PUT {{JobAI.Server_HostAddress}}/api/CoverLetters/1
 Content-Type: application/json
 
